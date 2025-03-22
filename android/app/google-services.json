@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "425674823924",
+    "project_id": "jrstore-c2de6",
+    "storage_bucket": "jrstore-c2de6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:425674823924:android:3be4d583bea70152a9e6a1",
+        "android_client_info": {
+          "package_name": "com.example.jr_store"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAziUGgQcd1KbmUPeTkIf9Re1wkp1uNQ1Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

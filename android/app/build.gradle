@@ -1,0 +1,51 @@
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services") // ✅ أضف Firebase هنا
+}
+
+android {
+    namespace = "com.example.jr_store"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId = "com.example.jr_store"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+dependencies {
+    // استيراد Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:33.10.0"))
+
+    // إضافة Firebase Analytics (إلزامي لاختبار الربط)
+    implementation("com.google.firebase:firebase-analytics")
+
+    // هنا يمكنك إضافة المزيد من خدمات Firebase التي تحتاجها مثل:
+    // implementation("com.google.firebase:firebase-auth")
+    // implementation("com.google.firebase:firebase-firestore")
+}
