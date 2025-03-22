@@ -1,3 +1,8 @@
+/// سيتم التعديل الآن على هذا الملف لعرض:
+/// - صورة المتجر
+/// - اسم مالك المتجر (من جدول users)
+/// - الدولة (من جدول users)
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -47,7 +52,6 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
     userUid = user.uid;
     userName = data['userName'];
 
-    // التحقق هل لديه متجر
     final storeQuery = await FirebaseFirestore.instance
         .collection('stores')
         .where('ownerUid', isEqualTo: user.uid)
@@ -194,10 +198,8 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  // داخل _CategoryStoresScreenState
                   ElevatedButton.icon(
                     onPressed: () {
-                      // انتقل إلى صفحة إنشاء المتجر مع تمرير اسم الفئة
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -209,7 +211,6 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
                     icon: Icon(Icons.add_business),
                     label: Text("إنشاء متجرك الآن"),
                   ),
-
                   SizedBox(height: 20),
                   if (hasStore)
                     FutureBuilder<QuerySnapshot>(
@@ -231,113 +232,73 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
                             storeDoc.data() as Map<String, dynamic>;
                         if (!storeData['categories']
                             .contains(widget.categoryName)) {
-                          return SizedBox(); // لا تعرض المتجر إذا الفئة لا تطابق
+                          return SizedBox();
                         }
 
                         final storeName = storeData['name'];
                         final storePhone = storeData['phone'];
                         final isApproved = storeData['isApproved'] ?? false;
+                        final imageUrl = storeData['imageUrl'] ?? '';
+                        final ownerUid = storeData['ownerUid'];
 
-                        return Card(
-                          color: Colors.green[800],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListTile(
-                            title: Text(
-                              storeName,
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text(
-                              "📞 $storePhone\nالحالة: ${isApproved ? 'مفتوح ✅' : 'مغلق ⛔'}",
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                            trailing: Icon(Icons.store, color: Colors.white),
-                            onTap: () {
-                              // لاحقًا: الدخول لإدارة المتجر
-                            },
-                          ),
+                        return FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(ownerUid)
+                              .get(),
+                          builder: (context, userSnapshot) {
+                            if (!userSnapshot.hasData) {
+                              return CircularProgressIndicator();
+                            }
+
+                            final userData = userSnapshot.data!.data()
+                                as Map<String, dynamic>;
+                            final ownerName =
+                                userData['userName'] ?? 'غير معروف';
+                            final country = userData['country'] ?? 'غير محدد';
+
+                            return Card(
+                              color: Colors.green[800],
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: ListTile(
+                                leading: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    imageUrl,
+                                    width: 60,
+                                    height: 60,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) => Icon(
+                                            Icons.image_not_supported,
+                                            color: Colors.white),
+                                  ),
+                                ),
+                                title: Text(
+                                  storeName,
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Text(
+                                  "📞 $storePhone\nالحالة: ${isApproved ? 'مفتوح ✅' : 'مغلق ⛔'}\nمالك المتجر: $ownerName\nالبلد: $country",
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                                trailing:
+                                    Icon(Icons.store, color: Colors.white),
+                                onTap: () {},
+                              ),
+                            );
+                          },
                         );
                       },
                     ),
                 ],
               ),
             )
-          : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('stores')
-                  .where('category', isEqualTo: widget.categoryName)
-                  .where('isApproved',
-                      isEqualTo: true) // ✅ فقط المتاجر المعتمدة
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.store_mall_directory,
-                            size: 60, color: Colors.white70),
-                        SizedBox(height: 10),
-                        Text(
-                          "لا توجد متاجر لهذه الفئة حاليًا",
-                          style: TextStyle(fontSize: 18, color: Colors.white),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                List<Store> stores = snapshot.data!.docs
-                    .map((doc) => Store.fromMap(
-                        doc.data() as Map<String, dynamic>, doc.id))
-                    .toList();
-
-                return Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ListView.builder(
-                    itemCount: stores.length,
-                    itemBuilder: (context, index) {
-                      final store = stores[index];
-                      return Card(
-                        color: Colors.green[800],
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: ListTile(
-                          title: Text(
-                            store.name,
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            "المالك: ${store.owner} | 📞 ${store.phone}",
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                          trailing: Icon(Icons.store, color: Colors.white),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    StoreProductsScreen(storeId: store.id),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
+          : Container(),
     );
   }
 }
