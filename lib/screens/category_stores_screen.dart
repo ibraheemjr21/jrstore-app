@@ -22,6 +22,7 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
   String? userUid;
   String? userName;
   bool hasStore = false;
+  bool _dialogShown = false;
 
   @override
   void initState() {
@@ -57,14 +58,6 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
     });
   }
 
-  // void _logout(BuildContext context) async {
-  //   await FirebaseAuth.instance.signOut();
-  //   Navigator.pushAndRemoveUntil(
-  //     context,
-  //     MaterialPageRoute(builder: (context) => HomeScreen()),
-  //     (Route<dynamic> route) => false,
-  //   );
-  // }
   Widget _buildDrawer() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return SizedBox();
@@ -96,11 +89,11 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
                     final userName = userData['userName'] ?? '';
                     final userType = userData['userType'] ?? '';
 
-                    return FutureBuilder<QuerySnapshot>(
-                      future: FirebaseFirestore.instance
+                    return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
                           .collection('stores')
-                          .where('ownerUid', isEqualTo: user.uid)
-                          .get(),
+                          .where('ownerUid', isEqualTo: userUid)
+                          .snapshots(),
                       builder: (context, storeSnapshot) {
                         Widget myStoreSection = SizedBox();
 
@@ -276,166 +269,290 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
       ),
       drawer: _buildDrawer(),
       body: userType == 'store_owner'
-          ? Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => CreateStoreScreen(
-                              categoryName: widget.categoryName),
+          ? _buildStoreOwnerView()
+          : _buildBuyerView(),
+    );
+  }
+
+  Widget _buildStoreOwnerView() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      CreateStoreScreen(categoryName: widget.categoryName),
+                ),
+              );
+            },
+            icon: Icon(Icons.add_business),
+            label: Text("إنشاء متجرك الآن"),
+          ),
+          SizedBox(height: 20),
+          if (hasStore)
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('stores')
+                  .where('ownerUid', isEqualTo: userUid)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return CircularProgressIndicator();
+                }
+                if (!snapshot.hasData) {
+                  return CircularProgressIndicator();
+                }
+
+                if (snapshot.data!.docs.isEmpty && !_dialogShown) {
+                  _dialogShown = true;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    showDialog(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: Text("تم حذف المتجر"),
+                        content: Text(
+                          "تم حذف متجرك من قبل الإدارة.\nيرجى التواصل مع الإدارة.",
+                          style: TextStyle(color: Colors.black),
                         ),
-                      );
-                    },
-                    icon: Icon(Icons.add_business),
-                    label: Text("إنشاء متجرك الآن"),
-                  ),
-                  SizedBox(height: 20),
-                  if (hasStore)
-                    FutureBuilder<QuerySnapshot>(
-                      future: FirebaseFirestore.instance
-                          .collection('stores')
-                          .where('ownerUid', isEqualTo: userUid)
-                          .get(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return CircularProgressIndicator();
-                        }
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return Text("لا يوجد متجر.");
-                        }
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              setState(() {
+                                hasStore = false;
+                              });
+                            },
+                            child: Text("موافق"),
+                          ),
+                        ],
+                      ),
+                    );
+                  });
+                  return SizedBox();
+                }
 
-                        final storeDoc = snapshot.data!.docs.first;
-                        final storeData =
-                            storeDoc.data() as Map<String, dynamic>;
-                        if (!storeData['categories']
-                            .contains(widget.categoryName)) {
-                          return SizedBox();
-                        }
+                final storeDoc = snapshot.data!.docs.first;
+                final storeData = storeDoc.data() as Map<String, dynamic>;
+                if (!storeData['categories'].contains(widget.categoryName)) {
+                  return SizedBox();
+                }
 
-                        final storeName = storeData['name'];
-                        final storePhone = storeData['phone'];
-                        final isApproved = storeData['isApproved'] ?? false;
-                        final imageUrl = storeData['imageUrl'] ?? '';
-                        final ownerUid = storeData['ownerUid'];
+                final storeName = storeData['name'];
+                final storePhone = storeData['phone'];
+                final isApproved = storeData['isApproved'] ?? false;
+                final imageUrl = storeData['imageUrl'] ?? '';
+                final ownerUid = storeData['ownerUid'];
 
-                        return FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(ownerUid)
-                              .get(),
-                          builder: (context, userSnapshot) {
-                            if (!userSnapshot.hasData) {
-                              return CircularProgressIndicator();
-                            }
+                return FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(ownerUid)
+                      .get(),
+                  builder: (context, userSnapshot) {
+                    if (!userSnapshot.hasData) {
+                      return CircularProgressIndicator();
+                    }
 
-                            final userData = userSnapshot.data!.data()
-                                as Map<String, dynamic>;
-                            final ownerName =
-                                userData['userName'] ?? 'غير معروف';
-                            final country = userData['country'] ?? 'غير محدد';
+                    final userData =
+                        userSnapshot.data!.data() as Map<String, dynamic>;
+                    final ownerName = userData['userName'] ?? 'غير معروف';
+                    final country = userData['country'] ?? 'غير محدد';
 
-                            return Card(
-                              color: Colors.green[800],
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Row(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        imageUrl,
-                                        width: 100,
-                                        height: 100,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                Image.asset(
-                                          'assets/images/logo.png',
-                                          width: 100,
-                                          height: 100,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            storeName,
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                          SizedBox(height: 6),
-                                          Text("📞 $storePhone",
-                                              style: TextStyle(
-                                                  color: Colors.white70)),
-                                          Text(
-                                              "الحالة: ${isApproved ? 'مفتوح ✅' : 'مغلق ⛔'}",
-                                              style: TextStyle(
-                                                  color: Colors.white70)),
-                                          Text("مالك المتجر: $ownerName",
-                                              style: TextStyle(
-                                                  color: Colors.white70)),
-                                          Text("البلد: $country",
-                                              style: TextStyle(
-                                                  color: Colors.white70)),
-                                          SizedBox(height: 10),
-                                          Align(
-                                            alignment: Alignment.centerRight,
-                                            child: ElevatedButton.icon(
-                                              onPressed: () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) =>
-                                                        CreateStoreScreen(
-                                                      categoryName:
-                                                          widget.categoryName,
-                                                      storeId: storeDoc.id,
-                                                      existingData: storeData,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              icon: Icon(Icons.edit),
-                                              label: Text("تعديل المتجر"),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.white,
-                                                foregroundColor: Colors.green,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                    return Card(
+                      color: Colors.green[800],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                imageUrl,
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Image.asset(
+                                  'assets/images/logo.png',
+                                  width: 100,
+                                  height: 100,
+                                  fit: BoxFit.cover,
                                 ),
                               ),
-                            );
-                          },
-                        );
-                      },
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    storeName,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  SizedBox(height: 6),
+                                  Text("📞 $storePhone",
+                                      style: TextStyle(color: Colors.white70)),
+                                  Text(
+                                      "الحالة: ${isApproved ? 'مفتوح ✅' : 'مغلق ⛔'}",
+                                      style: TextStyle(color: Colors.white70)),
+                                  Text("مالك المتجر: $ownerName",
+                                      style: TextStyle(color: Colors.white70)),
+                                  Text("البلد: $country",
+                                      style: TextStyle(color: Colors.white70)),
+                                  SizedBox(height: 10),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                CreateStoreScreen(
+                                              categoryName: widget.categoryName,
+                                              storeId: storeDoc.id,
+                                              existingData: storeData,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      icon: Icon(Icons.edit),
+                                      label: Text("تعديل المتجر"),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.white,
+                                        foregroundColor: Colors.green,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBuyerView() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('stores')
+          .where('categories', arrayContains: widget.categoryName)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(child: Text("لا توجد متاجر في هذه الفئة"));
+        }
+
+        final stores = snapshot.data!.docs;
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16.0),
+          itemCount: stores.length,
+          itemBuilder: (context, index) {
+            final storeData = stores[index].data() as Map<String, dynamic>;
+            final storeName = storeData['name'] ?? '';
+            final imageUrl = storeData['imageUrl'] ?? '';
+            final storePhone = storeData['phone'] ?? '';
+            final isApproved = storeData['isApproved'] ?? false;
+            final ownerUid = storeData['ownerUid'];
+
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(ownerUid)
+                  .get(),
+              builder: (context, userSnapshot) {
+                if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
+                  return SizedBox();
+                }
+
+                final userData =
+                    userSnapshot.data!.data() as Map<String, dynamic>;
+                final ownerName = userData['userName'] ?? 'غير معروف';
+                final country = userData['country'] ?? 'غير محدد';
+
+                return Card(
+                  color: Colors.green[800],
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            imageUrl,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Image.asset(
+                              'assets/images/logo.png',
+                              width: 100,
+                              height: 100,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                storeName,
+                                style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white),
+                              ),
+                              SizedBox(height: 6),
+                              Text("مالك المتجر: $ownerName",
+                                  style: TextStyle(color: Colors.white70)),
+                              Text("📞 $storePhone",
+                                  style: TextStyle(color: Colors.white70)),
+                              Text(
+                                  "الحالة: ${isApproved ? 'مفتوح ✅' : 'مغلق ⛔'}",
+                                  style: TextStyle(color: Colors.white70)),
+                              Text("البلد: $country",
+                                  style: TextStyle(color: Colors.white70)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                ],
-              ),
-            )
-          : Container(),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

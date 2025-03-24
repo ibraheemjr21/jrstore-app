@@ -9,12 +9,47 @@ Future<void> checkApprovalAndLogoutIfNeeded(BuildContext context) async {
 
   final doc =
       await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+  // ✅ إذا تم حذف الحساب من Firestore
+  if (!doc.exists) {
+    await FirebaseAuth.instance.signOut();
+
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: Text("تم حذف الحساب", style: TextStyle(color: Colors.black)),
+          content: Text(
+              "تم حذف حسابك من قبل الإدارة.\nيرجى التواصل مع الإدارة.",
+              style: TextStyle(color: Colors.black)),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // إغلاق الـ Dialog
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => HomeScreen()),
+                  (route) => false,
+                );
+              },
+              child: Text("موافق", style: TextStyle(color: Colors.black)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return;
+  }
+
   final data = doc.data();
 
+  // ✅ إذا تمت إزالة الموافقة من صاحب المتجر
   if (data?['userType'] == 'store_owner' && data?['isApproved'] == false) {
     await FirebaseAuth.instance.signOut();
 
-    // تأكد أنك ما فاتح هذا الـ Dialog مرتين
     if (context.mounted) {
       showDialog(
         context: context,
@@ -27,7 +62,7 @@ Future<void> checkApprovalAndLogoutIfNeeded(BuildContext context) async {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(); // يغلق الـ Dialog
+                Navigator.of(context).pop();
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => HomeScreen()),
