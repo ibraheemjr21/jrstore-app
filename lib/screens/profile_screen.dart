@@ -43,40 +43,115 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         .doc(widget.uid)
                         .snapshots(),
                     builder: (context, snapshot) {
-                      String userName = '';
-                      if (snapshot.hasData && snapshot.data!.exists) {
-                        var data =
-                            snapshot.data!.data() as Map<String, dynamic>;
-                        userName = data['userName'];
+                      if (!snapshot.hasData || !snapshot.data!.exists) {
+                        return DrawerHeader(
+                          decoration: BoxDecoration(color: Colors.green),
+                          child: Text("مرحبًا بك"),
+                        );
                       }
 
-                      return DrawerHeader(
-                        decoration: BoxDecoration(color: Colors.green),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            CircleAvatar(
-                              radius: 30,
-                              backgroundColor: Colors.white,
-                              child: Icon(Icons.person,
-                                  size: 40, color: Colors.green),
-                            ),
-                            SizedBox(height: 10),
-                            Text(
-                              'مرحبًا بك $userName',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                      final userData =
+                          snapshot.data!.data() as Map<String, dynamic>;
+                      final userName = userData['userName'] ?? '';
+                      final userType = userData['userType'] ?? '';
+
+                      return FutureBuilder<QuerySnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('stores')
+                            .where('ownerUid', isEqualTo: widget.uid)
+                            .get(),
+                        builder: (context, storeSnapshot) {
+                          Widget myStoreSection = SizedBox();
+
+                          if (userType == 'store_owner' &&
+                              storeSnapshot.hasData &&
+                              storeSnapshot.data!.docs.isNotEmpty) {
+                            final storeData = storeSnapshot.data!.docs.first
+                                .data() as Map<String, dynamic>;
+                            final storeName = storeData['name'] ?? '';
+                            final imageUrl = storeData['imageUrl'] ?? '';
+
+                            myStoreSection = Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0, vertical: 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Divider(color: Colors.white),
+                                  Text("🛒 متجري",
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 16)),
+                                  SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(
+                                          imageUrl,
+                                          width: 50,
+                                          height: 50,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                                  Image.asset(
+                                            'assets/images/logo.png',
+                                            width: 50,
+                                            height: 50,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          storeName,
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                            ),
-                            Text(
-                              'في متجر JrStore 👋',
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 16),
-                            ),
-                          ],
-                        ),
+                            );
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              DrawerHeader(
+                                decoration: BoxDecoration(color: Colors.green),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 30,
+                                      backgroundColor: Colors.white,
+                                      child: Icon(Icons.person,
+                                          size: 40, color: Colors.green),
+                                    ),
+                                    SizedBox(height: 10),
+                                    Text(
+                                      'مرحبًا بك $userName',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      'في متجر JrStore 👋',
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              myStoreSection,
+                            ],
+                          );
+                        },
                       );
                     },
                   ),

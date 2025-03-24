@@ -6,7 +6,8 @@ class Store {
   final String phone;
   final List<String> categories;
   final bool isApproved;
-  final String imageUrl; // ✅
+  final bool isOpen; // ✅ الجديد
+  final String imageUrl;
 
   Store({
     required this.id,
@@ -16,7 +17,8 @@ class Store {
     required this.phone,
     required this.categories,
     required this.isApproved,
-    required this.imageUrl, // ✅
+    required this.isOpen, // ✅
+    required this.imageUrl,
   });
 
   Map<String, dynamic> toMap() {
@@ -27,7 +29,8 @@ class Store {
       'phone': phone,
       'categories': categories,
       'isApproved': isApproved,
-      'imageUrl': imageUrl, // ✅
+      'isOpen': isOpen, // ✅
+      'imageUrl': imageUrl,
     };
   }
 
@@ -40,7 +43,8 @@ class Store {
       phone: map['phone'],
       categories: List<String>.from(map['categories']),
       isApproved: map['isApproved'] ?? false,
-      imageUrl: map['imageUrl'] ?? '', // ✅
+      isOpen: map['isOpen'] ?? true, // ✅
+      imageUrl: map['imageUrl'] ?? '',
     );
   }
 }
