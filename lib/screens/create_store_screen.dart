@@ -30,11 +30,62 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
   final TextEditingController _storeNameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _imageUrlController = TextEditingController();
+  final Map<String, Map<String, TimeOfDay>> _workingHours = {
+    'saturday': {
+      "open": TimeOfDay(hour: 8, minute: 0),
+      "close": TimeOfDay(hour: 20, minute: 0)
+    },
+    'sunday': {
+      "open": TimeOfDay(hour: 8, minute: 0),
+      "close": TimeOfDay(hour: 20, minute: 0)
+    },
+    'monday': {
+      "open": TimeOfDay(hour: 8, minute: 0),
+      "close": TimeOfDay(hour: 20, minute: 0)
+    },
+    'tuesday': {
+      "open": TimeOfDay(hour: 8, minute: 0),
+      "close": TimeOfDay(hour: 20, minute: 0)
+    },
+    'wednesday': {
+      "open": TimeOfDay(hour: 8, minute: 0),
+      "close": TimeOfDay(hour: 20, minute: 0)
+    },
+    'thursday': {
+      "open": TimeOfDay(hour: 8, minute: 0),
+      "close": TimeOfDay(hour: 20, minute: 0)
+    },
+    'friday': {
+      "open": TimeOfDay(hour: 8, minute: 0),
+      "close": TimeOfDay(hour: 20, minute: 0)
+    },
+  };
 
   File? _imageFile;
   Uint8List? _imageBytes;
   String? _ownerName;
   bool _isLoading = false;
+
+  String _translateDay(String day) {
+    switch (day) {
+      case 'saturday':
+        return 'السبت';
+      case 'sunday':
+        return 'الأحد';
+      case 'monday':
+        return 'الإثنين';
+      case 'tuesday':
+        return 'الثلاثاء';
+      case 'wednesday':
+        return 'الأربعاء';
+      case 'thursday':
+        return 'الخميس';
+      case 'friday':
+        return 'الجمعة';
+      default:
+        return day;
+    }
+  }
 
   @override
   void initState() {
@@ -48,7 +99,55 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
         _phoneController.text = widget.existingData!['phone'] ?? '';
         _imageUrlController.text = widget.existingData!['imageUrl'] ?? '';
       }
+      if (widget.existingData != null) {
+        _storeNameController.text = widget.existingData!['name'] ?? '';
+        _phoneController.text = widget.existingData!['phone'] ?? '';
+        _imageUrlController.text = widget.existingData!['imageUrl'] ?? '';
+
+        // تحديث ساعات العمل حسب البيانات الحالية
+        final existingHours = widget.existingData!['workingHours'];
+        if (existingHours != null && existingHours is Map<String, dynamic>) {
+          existingHours.forEach((day, times) {
+            if (times is Map<String, dynamic>) {
+              final open = _parseTimeOfDay(times['open']);
+              final close = _parseTimeOfDay(times['close']);
+              if (open != null && close != null) {
+                _workingHours[day] = {
+                  'open': open,
+                  'close': close,
+                };
+              }
+            }
+          });
+        }
+      }
     });
+  }
+
+  TimeOfDay? _parseTimeOfDay(String? timeStr) {
+    if (timeStr == null) return null;
+
+    try {
+      final parts = timeStr.trim().split(' ');
+      if (parts.length != 2) return null;
+
+      final time = parts[0]; // مثل "5:00"
+      final period = parts[1].toUpperCase(); // "AM" أو "PM"
+
+      final timeParts = time.split(':');
+      if (timeParts.length != 2) return null;
+
+      int hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+
+      if (period == 'PM' && hour != 12) hour += 12;
+      if (period == 'AM' && hour == 12) hour = 0;
+
+      return TimeOfDay(hour: hour, minute: minute);
+    } catch (e) {
+      print('❌ Failed to parse time "$timeStr": $e');
+      return null;
+    }
   }
 
   Future<void> _loadOwnerName() async {
@@ -101,6 +200,13 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
       await ref.putFile(_imageFile!);
       imageUrl = await ref.getDownloadURL();
     }
+    Map<String, Map<String, String>> formattedWorkingHours = {};
+    _workingHours.forEach((day, times) {
+      formattedWorkingHours[day] = {
+        'open': times['open']!.format(context),
+        'close': times['close']!.format(context),
+      };
+    });
 
     final storeData = {
       'name': _storeNameController.text.trim(),
@@ -108,8 +214,9 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
       'ownerUid': uid,
       'phone': _phoneController.text.trim(),
       'categories': [widget.categoryName],
-      'isApproved': false,
+      'isApproved': widget.existingData?['isApproved'] ?? false,
       'imageUrl': imageUrl,
+      'workingHours': formattedWorkingHours,
     };
 
     if (widget.storeId != null) {
@@ -199,6 +306,65 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
                       style: TextStyle(color: Colors.white),
                       validator: (value) =>
                           value == null || value.isEmpty ? "مطلوب" : null,
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: _workingHours.keys.map((day) {
+                        final open = _workingHours[day]!['open']!;
+                        final close = _workingHours[day]!['close']!;
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'ساعات العمل ليوم ${_translateDay(day)}:',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  ElevatedButton.icon(
+                                    onPressed: () async {
+                                      TimeOfDay? picked = await showTimePicker(
+                                        context: context,
+                                        initialTime: open,
+                                      );
+                                      if (picked != null) {
+                                        setState(() {
+                                          _workingHours[day]!['open'] = picked;
+                                        });
+                                      }
+                                    },
+                                    icon: Icon(Icons.access_time),
+                                    label: Text('فتح: ${open.format(context)}'),
+                                  ),
+                                  SizedBox(width: 12),
+                                  ElevatedButton.icon(
+                                    onPressed: () async {
+                                      TimeOfDay? picked = await showTimePicker(
+                                        context: context,
+                                        initialTime: close,
+                                      );
+                                      if (picked != null) {
+                                        setState(() {
+                                          _workingHours[day]!['close'] = picked;
+                                        });
+                                      }
+                                    },
+                                    icon: Icon(Icons.access_time),
+                                    label:
+                                        Text('إغلاق: ${close.format(context)}'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
                     ),
                     TextFormField(
                       controller: _phoneController,

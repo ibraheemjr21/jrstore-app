@@ -7,6 +7,7 @@ import 'package:jr_store/screens/create_store_screen.dart';
 import 'home_screen.dart';
 import '../screens/utils/approval_checker.dart';
 import 'profile_screen.dart';
+import 'dart:async';
 
 class CategoryStoresScreen extends StatefulWidget {
   final String categoryName;
@@ -18,6 +19,7 @@ class CategoryStoresScreen extends StatefulWidget {
 }
 
 class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
+  Timer? _refreshTimer;
   String? userType;
   String? userUid;
   String? userName;
@@ -30,7 +32,76 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await checkApprovalAndLogoutIfNeeded(context);
       await _loadUserData();
+      _refreshTimer = Timer.periodic(Duration(minutes: 1), (_) {
+        if (mounted) setState(() {}); // يعيد بناء الواجهة كل دقيقة
+      });
     });
+  }
+
+  bool isStoreOpen(Map<String, dynamic> workingHoursMap) {
+    final now = DateTime.now();
+    final days = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday'
+    ];
+    final today = days[now.weekday - 1];
+
+    if (!workingHoursMap.containsKey(today)) return false;
+
+    try {
+      final todayHours = workingHoursMap[today];
+
+      if (todayHours is String) {
+        print("❌ workingHours[$today] is a String: $todayHours");
+        return false;
+      }
+
+      final openStr = todayHours['open'] as String;
+      final closeStr = todayHours['close'] as String;
+
+      final openTimeParts = openStr.split(':');
+      final closeTimeParts = closeStr.split(':');
+
+      final openHour = int.parse(openTimeParts[0]);
+      final openMinute = int.parse(openTimeParts[1].split(' ')[0]);
+      final openPeriod = openStr.contains('PM') ? 12 : 0;
+
+      final closeHour = int.parse(closeTimeParts[0]);
+      final closeMinute = int.parse(closeTimeParts[1].split(' ')[0]);
+      final closePeriod = closeStr.contains('PM') ? 12 : 0;
+
+      final openTime =
+          TimeOfDay(hour: openHour % 12 + openPeriod, minute: openMinute);
+      final closeTime =
+          TimeOfDay(hour: closeHour % 12 + closePeriod, minute: closeMinute);
+
+      final nowTime = TimeOfDay.fromDateTime(now);
+
+      final isAfterOpen = nowTime.hour > openTime.hour ||
+          (nowTime.hour == openTime.hour && nowTime.minute >= openTime.minute);
+
+      final isBeforeClose = nowTime.hour < closeTime.hour ||
+          (nowTime.hour == closeTime.hour && nowTime.minute < closeTime.minute);
+
+      print(
+          "✅ NOW: ${nowTime.format(context)} | OPEN: ${openTime.format(context)} | CLOSE: ${closeTime.format(context)}");
+
+      return isAfterOpen && isBeforeClose;
+    } catch (e) {
+      print("❌ Error in isStoreOpen: $e");
+      return false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -102,6 +173,8 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
                             storeSnapshot.data!.docs.isNotEmpty) {
                           final storeData = storeSnapshot.data!.docs.first
                               .data() as Map<String, dynamic>;
+                          final bool isCurrentlyOpen =
+                              isStoreOpen(storeData['workingHours']);
                           final storeName = storeData['name'] ?? '';
                           final imageUrl = storeData['imageUrl'] ?? '';
 
@@ -260,7 +333,16 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (userType == null) {
+      return Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.green,
+          title: Text(widget.categoryName),
+        ),
+        drawer: _buildDrawer(),
+        body: Center(child: CircularProgressIndicator()), // ⏳ تحميل
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -337,6 +419,9 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
 
                 final storeDoc = snapshot.data!.docs.first;
                 final storeData = storeDoc.data() as Map<String, dynamic>;
+                final bool isCurrentlyOpen =
+                    isStoreOpen(storeData['workingHours']);
+
                 if (!storeData['categories'].contains(widget.categoryName)) {
                   return SizedBox();
                 }
@@ -367,9 +452,12 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
+                      elevation: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(12),
@@ -389,53 +477,72 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
                             ),
                             SizedBox(width: 16),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    storeName,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  SizedBox(height: 6),
-                                  Text("📞 $storePhone",
-                                      style: TextStyle(color: Colors.white70)),
-                                  Text(
-                                      "الحالة: ${isApproved ? 'مفتوح ✅' : 'مغلق ⛔'}",
-                                      style: TextStyle(color: Colors.white70)),
-                                  Text("مالك المتجر: $ownerName",
-                                      style: TextStyle(color: Colors.white70)),
-                                  Text("البلد: $country",
-                                      style: TextStyle(color: Colors.white70)),
-                                  SizedBox(height: 10),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: ElevatedButton.icon(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                CreateStoreScreen(
-                                              categoryName: widget.categoryName,
-                                              storeId: storeDoc.id,
-                                              existingData: storeData,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      icon: Icon(Icons.edit),
-                                      label: Text("تعديل المتجر"),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.white,
-                                        foregroundColor: Colors.green,
+                              child: Directionality(
+                                textDirection: TextDirection.rtl,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "🏪 $storeName",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
                                       ),
                                     ),
-                                  ),
-                                ],
+                                    SizedBox(height: 6),
+                                    Text("👤 المالك: $ownerName",
+                                        style:
+                                            TextStyle(color: Colors.white70)),
+                                    Text("📞 الهاتف: $storePhone",
+                                        style:
+                                            TextStyle(color: Colors.white70)),
+                                    WorkingHoursWidget(
+                                      workingHours: Map<String, dynamic>.from(
+                                          storeData['workingHours'] ?? {}),
+                                    ),
+                                    Text("📍 الدولة: $country",
+                                        style:
+                                            TextStyle(color: Colors.white70)),
+                                    Text(
+                                      "✅ الحالة: ${isApproved ? (isCurrentlyOpen ? 'مفتوح ✅' : 'مغلق الآن ⛔') : 'قيد المراجعة ⏳'}",
+                                      style: TextStyle(
+                                        color: isApproved
+                                            ? (isCurrentlyOpen
+                                                ? Colors.lightGreenAccent
+                                                : Colors.redAccent)
+                                            : Colors.orange,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  CreateStoreScreen(
+                                                categoryName:
+                                                    widget.categoryName,
+                                                storeId: storeDoc.id,
+                                                existingData: storeData,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        icon: Icon(Icons.edit),
+                                        label: Text("تعديل المتجر"),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.white,
+                                          foregroundColor: Colors.green[800],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
@@ -456,6 +563,7 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
       stream: FirebaseFirestore.instance
           .collection('stores')
           .where('categories', arrayContains: widget.categoryName)
+          .where('isApproved', isEqualTo: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -476,6 +584,7 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
             final imageUrl = storeData['imageUrl'] ?? '';
             final storePhone = storeData['phone'] ?? '';
             final isApproved = storeData['isApproved'] ?? false;
+            final bool isCurrentlyOpen = isStoreOpen(storeData['workingHours']);
             final ownerUid = storeData['ownerUid'];
 
             return FutureBuilder<DocumentSnapshot>(
@@ -498,10 +607,12 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
+                  elevation: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
@@ -521,27 +632,43 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
                         ),
                         SizedBox(width: 16),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                storeName,
-                                style: TextStyle(
+                          child: Directionality(
+                            textDirection: TextDirection.rtl,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "🏪 $storeName",
+                                  style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.white),
-                              ),
-                              SizedBox(height: 6),
-                              Text("مالك المتجر: $ownerName",
-                                  style: TextStyle(color: Colors.white70)),
-                              Text("📞 $storePhone",
-                                  style: TextStyle(color: Colors.white70)),
-                              Text(
-                                  "الحالة: ${isApproved ? 'مفتوح ✅' : 'مغلق ⛔'}",
-                                  style: TextStyle(color: Colors.white70)),
-                              Text("البلد: $country",
-                                  style: TextStyle(color: Colors.white70)),
-                            ],
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: 6),
+                                Text("👤 المالك: $ownerName",
+                                    style: TextStyle(color: Colors.white70)),
+                                Text("📞 الهاتف: $storePhone",
+                                    style: TextStyle(color: Colors.white70)),
+                                WorkingHoursWidget(
+                                  workingHours: Map<String, dynamic>.from(
+                                      storeData['workingHours'] ?? {}),
+                                ),
+                                Text("📍 الدولة: $country",
+                                    style: TextStyle(color: Colors.white70)),
+                                Text(
+                                  "✅ الحالة: ${isApproved ? (isCurrentlyOpen ? 'مفتوح ✅' : 'مغلق الآن ⛔') : 'قيد المراجعة ⏳'}",
+                                  style: TextStyle(
+                                    color: isApproved
+                                        ? (isCurrentlyOpen
+                                            ? Colors.lightGreenAccent
+                                            : Colors.redAccent)
+                                        : Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -553,6 +680,72 @@ class _CategoryStoresScreenState extends State<CategoryStoresScreen> {
           },
         );
       },
+    );
+  }
+}
+
+class WorkingHoursWidget extends StatefulWidget {
+  final Map<String, dynamic> workingHours;
+
+  const WorkingHoursWidget({required this.workingHours});
+
+  @override
+  _WorkingHoursWidgetState createState() => _WorkingHoursWidgetState();
+}
+
+class _WorkingHoursWidgetState extends State<WorkingHoursWidget> {
+  bool _expanded = false;
+
+  final arabicDays = {
+    'saturday': 'السبت',
+    'sunday': 'الأحد',
+    'monday': 'الإثنين',
+    'tuesday': 'الثلاثاء',
+    'wednesday': 'الأربعاء',
+    'thursday': 'الخميس',
+    'friday': 'الجمعة',
+  };
+
+  String getTodayName() {
+    final now = DateTime.now();
+    final days = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday'
+    ];
+    return days[now.weekday - 1];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final today = getTodayName();
+    final todayHours = widget.workingHours[today];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Text(
+            "🕒 اليوم: ${arabicDays[today]} (${todayHours != null ? "${todayHours['open']} - ${todayHours['close']}" : "غير محدد"})",
+            style: TextStyle(color: Colors.white70),
+          ),
+        ),
+        if (_expanded) ...[
+          SizedBox(height: 8),
+          ...widget.workingHours.entries.map((entry) {
+            final day = entry.key;
+            final data = entry.value;
+            return Text(
+              "${arabicDays[day]}: ${data['open']} - ${data['close']}",
+              style: TextStyle(color: Colors.white60, fontSize: 13),
+            );
+          }).toList(),
+        ],
+      ],
     );
   }
 }
